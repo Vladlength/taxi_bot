@@ -41,9 +41,9 @@ translations = {
         'start_address': "Начальный адрес",
         'end_address': "Конечный адрес",
         'trip_type': "Тип поездки"
-        # ,'trip': {
-        #     'driver': "Водитель найден и направляется к вам.",
-        # }
+        ,'trip': {
+            'driver': "Водитель найден и направляется к вам.",
+        }
     },
     'en': {
         'confirmation_message': "Please confirm the correctness of the data:\nStart address: {start_address}\nEnd address: {end_address}\nTrip type: {trip_type}\n",
@@ -65,9 +65,9 @@ translations = {
         'start_address': "Start address",
         'end_address': "End address",
         'trip_type': "Trip type"
-        # ,'trip': {
-        #     'driver': "Driver found and heading to you.",
-        # }
+        ,'trip': {
+            'driver': "Driver found and heading to you.",
+        }
     },
     'fr': {
         'confirmation_message': "Veuillez confirmer l'exactitude des données :\nAdresse de départ : {start_address}\nAdresse de fin : {end_address}\nType de voyage : {trip_type}\n",
@@ -89,9 +89,9 @@ translations = {
         'start_address': "Adresse de départ",
         'end_address': "Adresse de destination",
         'trip_type': "Type de voyage"
-        # ,'trip': {
-        #     'driver': "Le chauffeur a été trouvé et se dirige vers vous.",
-        # }
+        ,'trip': {
+            'driver': "Le chauffeur a été trouvé et se dirige vers vous.",
+        }
     }
 }
 
@@ -274,15 +274,12 @@ def handle_voice(message):
 
         # Анализ текста с помощью Yandex GPT
         gpt_response = analyze_text_with_gpt(text, language)
-        print("_______")
-        print(gpt_response)
+
 
         # Разбор ответа GPT
         if gpt_response:
             data = parse_gpt_response(gpt_response, language)
-            print("=========================")
-            print(data)
-            print("=========================")
+
             user_data[user_id].update(data)
         else:
             send_message(message.chat.id, 'error')
@@ -343,7 +340,9 @@ def handle_text(message):
     elif text == 'да' and user_id in user_confirmation:
         save_data_to_file(user_id, user_confirmation[user_id])
         send_message(message.chat.id, 'thank_you')
-        notify_driver_found(message.chat.id, user_preferences, )
+        send_audio_message(message.chat.id, translations[user_preferences[user_id]['language']]['trip']['driver'])
+        # notify_driver_found(message.chat.id, user_preferences)
+        # send_message(message.chat.id, translations[user_preferences[user_id]['language']]['trip']['driver'], user_preferences.get(message.chat.id, 'text'))
         user_data.pop(user_id, None)
         user_confirmation.pop(user_id, None)
 
