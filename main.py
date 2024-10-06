@@ -87,7 +87,7 @@ translations = {
         'voice_recognized': "Voix reconnue",  # 1
         'gpt_text': "Analysez le texte en adresse de départ, adresse de fin et type de voyage. Juste ça, rien de plus n'est nécessaire",
         'start_address': "Adresse de départ",
-        'end_address': "Adresse de destination",
+        'end_address': "Adresse de fin",
         'trip_type': "Type de voyage"
         ,'trip': {
             'driver': "Le chauffeur a été trouvé et se dirige vers vous.",
