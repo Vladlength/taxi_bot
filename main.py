@@ -1,10 +1,16 @@
 import telebot
-from notifications import notify_driver_found, notify_car_arrival, notify_trip_started, notify_trip_ended
+# from notifications import notify_driver_found, notify_car_arrival, notify_trip_started, notify_trip_ended
 import speech_recognition as sr
 from pydub import AudioSegment
 import os
+import traceback
 import requests
 from gtts import gTTS
+from google.cloud import speech
+from pydub import AudioSegment
+
+import address_dict
+from test import find_closest_address as find_address
 from config import *
 
 API_TOKEN = TELEGRAM_API  # Замените на ваш токен
@@ -22,6 +28,7 @@ user_preferences = {}  # Хранение настроек пользовате�
 # Словари для перевода фраз на разные языки
 translations = {
     'ru': {
+        'lang': "ru-RU",
         'confirmation_message': "Пожалуйста, подтвердите правильность данных:\nНачальный адрес: {start_address}\nКонечный адрес: {end_address}\nТип поездки: {trip_type}\n",
         'text_response': "Вы выбрали текстовые сообщения.",
         'audio_response': "Вы выбрали голосовые сообщения.",
@@ -37,15 +44,16 @@ translations = {
         'confirm_data': "Пожалуйста, подтвердите правильность данных, нажав 'Да' или 'Нет'.",
         'start_over': "Пожалуйста, начните заново.",
         'voice_recognized': "Голос распознан",  # 1
-        'gpt_text': "Разбери текст на начальный адрес, конечный адрес и тип поездки. Только это, ничего дополнительного не надо",
+        'gpt_text': "Разбери текст на Начальный адрес, Конечный адрес и Тип поездки. Только это, ничего дополнительного не надо",
         'start_address': "Начальный адрес",
         'end_address': "Конечный адрес",
         'trip_type': "Тип поездки"
-        ,'trip': {
+        , 'trip': {
             'driver': "Водитель найден и направляется к вам.",
         }
     },
     'en': {
+        'lang': "fr-FR",
         'confirmation_message': "Please confirm the correctness of the data:\nStart address: {start_address}\nEnd address: {end_address}\nTrip type: {trip_type}\n",
         'text_response': "You have selected text messages.",
         'audio_response': "You have selected audio messages.",
@@ -65,11 +73,12 @@ translations = {
         'start_address': "Start address",
         'end_address': "End address",
         'trip_type': "Trip type"
-        ,'trip': {
+        , 'trip': {
             'driver': "Driver found and heading to you.",
         }
     },
     'fr': {
+        'lang': "fr-FR",
         'confirmation_message': "Veuillez confirmer l'exactitude des données :\nAdresse de départ : {start_address}\nAdresse de fin : {end_address}\nType de voyage : {trip_type}\n",
         'text_response': "Vous avez choisi les messages texte.",
         'audio_response': "Vous avez choisi les messages audio.",
@@ -89,7 +98,7 @@ translations = {
         'start_address': "Adresse de départ",
         'end_address': "Adresse de fin",
         'trip_type': "Type de voyage"
-        ,'trip': {
+        , 'trip': {
             'driver': "Le chauffeur a été trouvé et se dirige vers vous.",
         }
     }
@@ -246,8 +255,75 @@ def send_welcome(message):
 
 
 # Обработчик голосовых сообщений
+# @bot.message_handler(content_types=['voice'])
+# def handle_voice(message):
+#     user_id = message.from_user.id
+#     language = user_preferences.get(user_id, {}).get('language', 'ru')
+#
+#     try:
+#         file_info = bot.get_file(message.voice.file_id)
+#         file = bot.download_file(file_info.file_path)
+#
+#         with open("voice.ogg", 'wb') as f:
+#             f.write(file)
+#         # Конвертируем .ogg в .wav
+#         audio = AudioSegment.from_ogg("voice.ogg")
+#         audio.export("voice.wav", format="wav")
+#         # Распознаем речь из .wav файла
+#         recognizer = sr.Recognizer()
+#
+#         with sr.AudioFile("voice.wav") as source:
+#             audio_data = recognizer.record(source)
+#             text = recognizer.recognize_google(audio_data, language=f"{language}-RU")
+#
+#         send_message(message.chat.id, 'voice_recognized', text=text)
+#
+#         if user_id not in user_data:
+#             user_data[user_id] = {}
+#
+#         # Анализ текста с помощью Yandex GPT
+#         gpt_response = analyze_text_with_gpt(text, language)
+#
+#
+#         # Разбор ответа GPT
+#         if gpt_response:
+#             data = parse_gpt_response(gpt_response, language)
+#             print("------------------")
+#             print(data)
+#             print("------------------")
+#
+#             user_data[user_id].update(data)
+#         else:
+#             send_message(message.chat.id, 'error')
+#
+#         # Проверка на наличие всех данных
+#         missing_data = get_missing_data(user_id)
+#
+#         if missing_data:
+#             send_message(message.chat.id, 'request_missing_data', missing_data=', '.join(missing_data))
+#         else:
+#             user_confirmation[user_id] = user_data[user_id]
+#             confirmation_message = get_translation(message.chat.id, 'confirmation_message',
+#                                                    start_address=user_data[user_id].get('start_address', 'Не указан'),
+#                                                    end_address=user_data[user_id].get('end_address', 'Не указан'),
+#                                                    trip_type=user_data[user_id].get('trip_type', 'Не указан'))
+#             keyboard = create_confirmation_keyboard()
+#             # send_message(message.chat.id, 'confirmation_message',
+#             #              start_address=user_data[user_id].get('start_address', 'Не указан'),
+#             #              end_address=user_data[user_id].get('end_address', 'Не указан'),
+#             #              trip_type=user_data[user_id].get('trip_type', 'Не указан'))
+#             bot.send_message(message.chat.id, confirmation_message, reply_markup=keyboard)
+#
+#         # Удаляем временные файлы
+#         os.remove("voice.ogg")
+#         os.remove("voice.wav")
+#
+#     except Exception as e:
+#         send_message(message.chat.id, 'error')
+#         print(f"Ошибка: {e}")
+
 @bot.message_handler(content_types=['voice'])
-def handle_voice(message):
+def google_handle_voice(message):
     user_id = message.from_user.id
     language = user_preferences.get(user_id, {}).get('language', 'ru')
 
@@ -257,15 +333,28 @@ def handle_voice(message):
 
         with open("voice.ogg", 'wb') as f:
             f.write(file)
-        # Конвертируем .ogg в .wav
         audio = AudioSegment.from_ogg("voice.ogg")
-        audio.export("voice.wav", format="wav")
-        # Распознаем речь из .wav файла
-        recognizer = sr.Recognizer()
+        # Изменение частоты дискретизации на 16000 Гц и битности на 16 бит
+        audio = audio.set_frame_rate(16000).set_sample_width(2)  # 2 байта = 16 бит
+        # Сохранение нового файла
+        audio.export("voice_16bit_16000.wav", format="wav")
+        with open('voice_16bit_16000.wav', 'rb') as audio_file:
+            content = audio_file.read()
+        audio = speech.RecognitionAudio(content=content)
 
-        with sr.AudioFile("voice.wav") as source:
-            audio_data = recognizer.record(source)
-            text = recognizer.recognize_google(audio_data, language=f"{language}-RU")
+        client = speech.SpeechClient()
+
+        config = speech.RecognitionConfig(
+            encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
+            sample_rate_hertz=16000,  # 16000
+            # language_code="en-US",
+            language_code=translations[language]['lang']
+        )
+
+        # Detects speech in the audio file
+        response = client.recognize(config=config, audio=audio)
+
+        text = response.results[0].alternatives[0].transcript
 
         send_message(message.chat.id, 'voice_recognized', text=text)
 
@@ -275,10 +364,12 @@ def handle_voice(message):
         # Анализ текста с помощью Yandex GPT
         gpt_response = analyze_text_with_gpt(text, language)
 
-
         # Разбор ответа GPT
         if gpt_response:
             data = parse_gpt_response(gpt_response, language)
+            print("------------------")
+            print(data)
+            print("------------------")
 
             user_data[user_id].update(data)
         else:
@@ -296,19 +387,33 @@ def handle_voice(message):
                                                    end_address=user_data[user_id].get('end_address', 'Не указан'),
                                                    trip_type=user_data[user_id].get('trip_type', 'Не указан'))
             keyboard = create_confirmation_keyboard()
-            # send_message(message.chat.id, 'confirmation_message',
-            #              start_address=user_data[user_id].get('start_address', 'Не указан'),
-            #              end_address=user_data[user_id].get('end_address', 'Не указан'),
-            #              trip_type=user_data[user_id].get('trip_type', 'Не указан'))
+
             bot.send_message(message.chat.id, confirmation_message, reply_markup=keyboard)
+
+            bot.send_message(message.chat.id, 'address_dict: ')
+            bot.send_message(message.chat.id,
+                             find_address(input_address=user_data[user_id].get('start_address', 'Не указан'),
+                                          address_list=address_dict.addresses))
+            bot.send_message(message.chat.id,
+                             find_address(input_address=user_data[user_id].get('end_address', 'Не указан'),
+                                          address_list=address_dict.addresses))
+
+            # print(find_address(input_address=user_data[user_id].get('start_address', 'Не указан'),
+            #                    address_list=address_dict.addresses))
 
         # Удаляем временные файлы
         os.remove("voice.ogg")
-        os.remove("voice.wav")
+        os.remove("voice_16bit_16000.wav")
 
     except Exception as e:
         send_message(message.chat.id, 'error')
         print(f"Ошибка: {e}")
+    # except Exception as e:
+    #     error_message = str(e)
+    #     error_traceback = traceback.format_exc()
+    #     send_message(message.chat.id, 'error')
+    #     print(f"Ошибка: {error_message}")
+    #     print(f"Трассировка:\n{error_traceback}")
 
 
 # Обработчик текстовых сообщений
